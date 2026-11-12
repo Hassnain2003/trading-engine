@@ -1,0 +1,67 @@
+# Crypto Agent Configuration
+# Secrets (API keys, Gemini key, ntfy topic, etc.) live in .env — never here.
+# Values here can be overridden by environment variables:
+#   RISK__DAILY_LOSS_LOCK_PCT=0.03   (section__key, case-insensitive)
+
+phase:
+  id: "demo_phase"                    # set via PHASE_ID env
+  label: "Demo phase — paper trading" # set via PHASE_LABEL env
+  started_utc: "2026-01-01T00:00:00+00:00"  # set via PHASE_STARTED_UTC env
+  starting_equity: 0.0                # set via STARTING_EQUITY env; 0.0 = fail-closed until a real balance lands
+  force_equity: false
+  min_lot_max_stop_risk_pct: 0.02
+
+risk:
+  daily_loss_lock_pct: 0.02
+  daily_flatten_pct: 0.04
+  daily_profit_target_pct: 0.02
+  max_trade_risk_pct: 0.02
+  weekly_kill_switch_pct: 0.07
+  max_positions: 16
+  max_weekend_positions: 14
+  min_stop_pct: 0.005
+
+strategy_risk:
+  # ACTIVE dials only (S2, S7, S9 are in ACTIVE_STRATEGIES).
+  # INACTIVE strategies — dials removed/marked 2026-10-19 (Stage 2.1), restore
+  # if the strategy is re-enabled:
+  #   strategy1_rsi_reversion: 0.01    # S1 — not in ACTIVE_STRATEGIES
+  #   strategy3_vwap_bands: 0.025      # S3 — disabled 2026-07-08 (PF 0.35)
+  #   strategy4_rsi_macd: 0.015        # S4 — disabled 2026-07-08 (PF 0.71)
+  #   strategy5_ma_crossover: 0.01     # S5 — not in ACTIVE_STRATEGIES
+  strategy2_breakout_retest: 0.008
+  strategy7_daily_momentum: 0.0035
+  default: 0.01
+
+micro_strategy_risk:
+  strategy2_breakout_retest: 0.015
+  strategy7_daily_momentum: 0.008
+
+notional_cap:
+  # strategy3_vwap_bands: 0.25  # INACTIVE — S3 not in ACTIVE_STRATEGIES
+  strategy7_daily_momentum: 0.12
+  strategy2_breakout_retest: 0.25
+  default: 0.10
+
+execution:
+  poll_interval_sec: 300
+  leverage: 10
+  limit_offset_pct: 0.0002
+  ioc_max_cross_pct: 0.002
+  pending_order_ttl_sec: 600
+  health_port: 8765
+
+liquidity:
+  spread_limit: 0.0005
+  volume_min_major: 2000000
+  volume_min_alt: 500000
+
+slippage:
+  bps_per_side: 0.5
+
+gate:
+  profit_factor: 1.3
+  sharpe_ratio: 1.0
+  max_drawdown_pct: 15.0
+  min_trades: 60
+  round_trip_cost_pct: 0.0011

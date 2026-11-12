@@ -1,0 +1,34 @@
+{
+  "_source": "Bybit V5 public REST /v5/market/instruments-info (linear, settled), captured live via ccxt",
+  "_captured_utc": "2026-10-19",
+  "ETH/USDT:USDT": {
+    "id": "ETHUSDT",
+    "category": "linear",
+    "settleCoin": "USDT",
+    "tick_size": 0.01,
+    "qty_step": 0.01,
+    "min_qty": 0.01,
+    "max_qty": 10000.0,
+    "max_mkt_order_qty": 2000.0,
+    "min_notional": 5.0,
+    "price_min": 0.01,
+    "price_max": 199999.98,
+    "leverage_max": 150.0,
+    "funding_interval_minutes": 480
+  },
+  "BTC/USDT:USDT": {
+    "id": "BTCUSDT",
+    "category": "linear",
+    "settleCoin": "USDT",
+    "tick_size": 0.1,
+    "qty_step": 0.001,
+    "min_qty": 0.001,
+    "max_qty": 1500.0,
+    "max_mkt_order_qty": 150.0,
+    "min_notional": 5.0,
+    "price_min": 0.1,
+    "price_max": 1999999.8,
+    "leverage_max": 150.0,
+    "funding_interval_minutes": 480
+  }
+}

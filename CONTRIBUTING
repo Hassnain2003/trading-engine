@@ -1,0 +1,28 @@
+# Contributing to trading-engine
+
+trading-engine is an educational / engineering project for a crypto trading
+engine (paper/demo only by default). It is **not** financial advice and makes
+no profit or return claims.
+
+## Before you contribute
+
+- Never commit secrets, API keys, personal data, or real trade history. All
+  credentials live in `.env` (ignored) and are templated in `.env.example`.
+- The engine defaults to Bybit demo/sandbox and refuses mainnet unless both
+  `ALLOW_MAINNET=true` and `I_UNDERSTAND_THE_RISK=yes` are set.
+- Trading is disabled unless `ENABLE_TRADING=true` is set.
+
+## Pull requests
+
+1. Fork the repo and create a branch from `main`.
+2. Run the test suite: `python -m pytest tests/`
+3. Run ruff: `ruff check --select=E9,F63,F7,F82 .`
+4. Ensure pre-commit passes (gitleaks + ruff + artifact block).
+5. Open a PR against `main`. CI runs gitleaks, tests, and pip-audit.
+
+## Research honesty
+
+Strategies S1, S3, S4, and S5 were disabled after walk-forward showed no edge;
+S9 (sacred harmonic) was removed from the public copy. Do not re-add
+numerology or profit-claim language. See the "Research honesty" section of the
+README.

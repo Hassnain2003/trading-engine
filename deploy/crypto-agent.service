@@ -1,0 +1,19 @@
+[Unit]
+Description=The Agent - Crypto Algorithmic Trading System
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=agent
+Group=agent
+WorkingDirectory=/opt/crypto_agent
+EnvironmentFile=/opt/crypto_agent/.env
+ExecStart=/opt/crypto_agent/venv/bin/python live/agent_runner.py
+Restart=always
+RestartSec=30
+StandardOutput=append:/opt/crypto_agent/agent_run.log
+StandardError=append:/opt/crypto_agent/agent_run.log
+
+[Install]
+WantedBy=multi-user.target

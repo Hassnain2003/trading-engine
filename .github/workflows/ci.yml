@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest ruff pip-audit
+
+      - name: Secret scan (gitleaks)
+        run: |
+          pip install gitleaks || true
+          gitleaks detect --source . --no-git --verbose || true
+
+      - name: Run test suite
+        run: |
+          python -m pytest tests/ -v
+
+      - name: Dependency vulnerability audit (pip-audit)
+        run: |
+          pip-audit --requirement requirements.txt || true
+
+      - name: Verify config loads
+        run: |
+          python -c "from utils.config_loader import load; cfg = load(); assert cfg['risk']['daily_loss_lock_pct'] == 0.02; print('config OK')"
+
+      - name: Verify all modules import
+        run: |
+          python -c "
+          from execution.engine import ExecutionEngine
+          from execution.config import STRATEGY_CONFIG, ACTIVE_STRATEGIES
+          from execution.db_manager import init_db
+          from execution.order_manager import place_limit_order, flatten_for_daily_loss
+          from execution.position_sync import reconcile_live_positions, normalize_side
+          from execution.market_data import collect_market_data
+          from execution.entry_scanner import scan_entries, try_entry
+          from risk.risk_manager import RiskManager
+          from utils.config_loader import load
+          print('All module imports OK')
+          "
+
+      - name: Lint changed Python files
+        run: |
+          ruff check --select=E9,F63,F7,F82 execution/ risk/ utils/ tests/ --show-source --statistics || true

@@ -1,0 +1,4 @@
+cutoff_utc=2026-10-19T21:04:00+00:00
+start_utc=2023-10-20T21:04:00+00:00
+lookback_days=1095
+source=bybit_public_rest_v5

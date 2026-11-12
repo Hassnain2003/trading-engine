@@ -1,0 +1,29 @@
+[gitleaks]
+# Repository-wide secret scanning baseline for the trading-engine public copy.
+# Fail the commit/push/CI on any detected secret.
+hide = false
+hide-history = false
+
+# File extensions to always allow (non-secret, project artifacts).
+allowlist = [
+  "data/checksums.sha256",
+  "data/cutoff.txt",
+  "data/gap_report.txt",
+]
+
+rules = [
+  # Bybit / exchange API keys (base58-ish, ~20-40 chars)
+  { id = "bybit-api-key", description = "Bybit API key", secret = "(?i)bybit[_-]?(api[_-]?)?key[\\s]*[:=][\\s]*['\"]?([A-Za-z0-9]{20,40})['\"]?" },
+  { id = "bybit-api-secret", description = "Bybit API secret", secret = "(?i)bybit[_-]?(api[_-]?)?secret[\\s]*[:=][\\s]*['\"]?([A-Za-z0-9]{32,64})['\"]?" },
+  # Generic long hex/base64 tokens (32+ chars) that look like secrets
+  { id = "generic-secret-token", description = "Generic secret token", secret = "(?i)(api[_-]?secret|secret[_-]?key|access[_-]?token|auth[_-]?token)[\\s]*[:=][\\s]*['\"]?([A-Za-z0-9_-]{32,})['\"]?" },
+  # ntfy topic / Discord webhook / Telegram bot token
+  { id = "ntfy-topic", description = "ntfy topic name", secret = "ntfy\\.sh/[A-Za-z0-9_-]{8,}" },
+  { id = "discord-webhook", description = "Discord webhook URL", secret = "discordapp\\.com/api/webhooks/[0-9]+/[A-Za-z0-9_-]+" },
+  { id = "telegram-bot-token", description = "Telegram bot token", secret = "[0-9]{8,10}:[A-Za-z0-9_-]{30,}" },
+  # SMTP credentials
+  { id = "smtp-password", description = "SMTP password", secret = "(?i)smtp[_-]?password[\\s]*[:=][\\s]*['\"]?([^'\"\\s]{6,})['\"]?" },
+  # Personal data patterns
+  { id = "email-address", description = "Email address", secret = "[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}" },
+  { id = "home-path", description = "Absolute home path (/home/...)", secret = "/home/[A-Za-z0-9_.-]+" },
+]

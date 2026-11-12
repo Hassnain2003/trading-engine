@@ -1,0 +1,70 @@
+# --- Secrets & credentials (never commit) ---
+.env
+.env.*
+!.env.example
+.env.local
+.env.*.local
+
+# --- Runtime / journal / log artifacts ---
+*.db
+*.db-*
+*.db.*
+*.sqlite
+*.sqlite3
+*.sqlite-*
+agent.health
+agent.lock
+agent_run.log
+dashboard.log
+logs/
+archives/
+backups/
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+venv/
+.venv/
+.env
+pip-log.txt
+pip-delete-this-directory.txt
+.tox/
+.coverage
+.cache/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+*.egg
+build/
+dist/
+.eggs/
+
+# --- Data (raw CSVs are large and regenerated; keep checksums + cutoff + gap report) ---
+data/*.csv
+data/download.log
+!data/checksums.sha256
+!data/cutoff.txt
+!data/gap_report.txt
+!data/download_data.py
+
+# --- IDE / editor ---
+.idea/
+.vscode/
+.claude/
+.junie/
+*.sublime-project
+*.sublime-workspace
+*.swp
+*.swo
+*~
+.DS_Store
+
+# --- Streamlit (secrets never committed; config.toml is UI-local) ---
+.streamlit/secrets.toml
+
+# --- OS ---
+Thumbs.db
+ehthumbs.db

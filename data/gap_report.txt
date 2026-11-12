@@ -1,0 +1,33 @@
+Gap report — candle continuity
+==================================================================
+
+BTCUSDT 5m
+  candles: 315360  first: 2023-10-20T21:05:00+00:00  last: 2026-10-19T21:00:00+00:00
+  gaps > 1.5x interval: 0
+
+BTCUSDT 15m
+  candles: 105120  first: 2023-10-20T21:15:00+00:00  last: 2026-10-19T21:00:00+00:00
+  gaps > 1.5x interval: 0
+
+BTCUSDT 1d
+  candles: 1095  first: 2023-10-21T00:00:00+00:00  last: 2026-10-19T00:00:00+00:00
+  gaps > 1.5x interval: 0
+
+ETHUSDT 5m
+  candles: 315360  first: 2023-10-20T21:05:00+00:00  last: 2026-10-19T21:00:00+00:00
+  gaps > 1.5x interval: 0
+
+ETHUSDT 15m
+  candles: 105120  first: 2023-10-20T21:15:00+00:00  last: 2026-10-19T21:00:00+00:00
+  gaps > 1.5x interval: 0
+
+ETHUSDT 1d
+  candles: 1095  first: 2023-10-21T00:00:00+00:00  last: 2026-10-19T00:00:00+00:00
+  gaps > 1.5x interval: 0
+
+==================================================================
+Funding record counts
+  BTCUSDT: 3285 records, first 2023-10-21T00:00:00+00:00, last 2026-10-19T16:00:00+00:00, 0 interval gaps
+  ETHUSDT: 3285 records, first 2023-10-21T00:00:00+00:00, last 2026-10-19T16:00:00+00:00, 0 interval gaps
+
+Cutoff: 2026-10-19T21:04:00+00:00
