@@ -125,7 +125,7 @@ flowchart TD
     LOAD --> REX --> RBR --> WF
     STRAT -. same signal functions .-> RBR
     RISK -. same risk rules .-> RBR
-    RBR -. semantics in SEMANTICS.md .- ENG
+    RBR -.|same execution semantics|- ENG
 ```
 
 **Reading the diagram:** data flows from the venue into the scanner, signals from strategies are gated by the risk manager, and only then does the order manager talk to the exchange. Everything the engine does is written to the journal. The research harness reuses the same strategy functions and the same risk manager against local candles.
