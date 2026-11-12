@@ -123,9 +123,9 @@ flowchart TD
     SCHED --> ALERT
 
     LOAD --> REX --> RBR --> WF
-    STRAT -. same signal functions .-> RBR
-    RISK -. same risk rules .-> RBR
-    RBR -.|same execution semantics|- ENG
+    STRAT -->|signal functions| RBR
+    RISK -->|risk rules| RBR
+    RBR -->|same execution semantics| ENG
 ```
 
 **Reading the diagram:** data flows from the venue into the scanner, signals from strategies are gated by the risk manager, and only then does the order manager talk to the exchange. Everything the engine does is written to the journal. The research harness reuses the same strategy functions and the same risk manager against local candles.
@@ -195,8 +195,8 @@ flowchart LR
         R1["Local candle CSVs"] --> R2["ReplayExchange"] --> R3["ReplayBroker"] --> R4["Trade ledger"] --> R5["Walk-forward report"]
     end
     SEM["SEMANTICS.md: shared execution rules R1 to R11"]
-    SEM -.-> L2
-    SEM -.-> R3
+    SEM --> L2
+    SEM --> R3
 ```
 
 The replay is an approximation of live execution, not a guarantee. Its deliberate conventions are documented in `research/SEMANTICS.md`.
