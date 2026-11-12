@@ -1,25 +1,67 @@
 # trading-engine
 
-**One-line pitch:** A conservative, demo-only crypto trading engine whose live
-execution path and replay/walk-forward harness share one execution semantics
-specification — built to be safe by default, never to place an order by
-accident.
+**A conservative, demo-only crypto trading engine whose live execution path and replay/walk-forward harness share one execution-semantics specification. It is built to be safe by default and never to place an order by accident.**
 
-[![CI](https://github.com/HassnainAbbas/trading-engine/actions/workflows/ci.yml/badge.svg)](https://github.com/HassnainAbbas/trading-engine/actions/workflows/ci.yml)
-
-> **Demo/username note:** Replace `HassnainAbbas` in the badge URL above with
-> your GitHub username once the repository exists.
+[![CI](https://github.com/Hassnain2003/trading-engine/actions/workflows/ci.yml/badge.svg)](https://github.com/Hassnain2003/trading-engine/actions/workflows/ci.yml)
+![Python](https://img.shields.io/badge/python-3.12-blue)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 ---
 
-## ⚠️ Disclaimer (read first)
+## Disclaimer (read first)
 
-trading-engine is an **educational and engineering project**, not financial
-advice. It makes **no profit, return, or win-rate claims**, and it is **not**
-tested or traded on live money unless *you* explicitly opt into mainnet (which
-the engine refuses by default). The default venue is **Bybit demo/sandbox**.
-Use at your own risk. You can lose real money if you override the safeties and
-connect to mainnet.
+trading-engine is an **educational and engineering project**, not financial advice. It makes **no profit, return, or win-rate claims**. The default venue is **Bybit demo/sandbox**, trading is **disabled by default**, and the engine **refuses mainnet** unless you explicitly set two consent flags. If you override those safeties and connect to mainnet, you can lose real money. Use at your own risk.
+
+---
+
+## Table of contents
+
+1. [What this is](#what-this-is)
+2. [Features](#features)
+3. [Architecture](#architecture)
+4. [How one bar is processed](#how-one-bar-is-processed)
+5. [Live engine and replay harness: one set of semantics](#live-engine-and-replay-harness-one-set-of-semantics)
+6. [Risk manager](#risk-manager)
+7. [Strategies](#strategies)
+8. [Research and walk-forward evaluation](#research-and-walk-forward-evaluation)
+9. [Data](#data)
+10. [Persistence and observability](#persistence-and-observability)
+11. [Safe by default](#safe-by-default)
+12. [Quick start (Bybit demo only)](#quick-start-bybit-demo-only)
+13. [Configuration](#configuration)
+14. [Tests and CI](#tests-and-ci)
+15. [Repository layout](#repository-layout)
+16. [Limitations](#limitations)
+17. [Research honesty](#research-honesty)
+18. [Roadmap](#roadmap)
+19. [License](#license)
+
+---
+
+## What this is
+
+Most trading-bot repositories show a signal and a backtest. This project is about the part that usually goes wrong in production: **executing safely and proving that what you tested is what runs.**
+
+It has three goals:
+
+1. **Execute conservatively.** A central risk manager decides whether any entry may be placed, and it fails closed.
+2. **Test what runs.** The live engine and the replay harness follow the same documented execution semantics (`research/SEMANTICS.md`), so a walk-forward result is comparable to live behaviour.
+3. **Decide with rules written in advance.** Strategies must pass preregistered eligibility rules (`research/PREREG.md`) on out-of-sample data before they are considered for live capital. Strategies that failed were disabled, and this README says so.
+
+---
+
+## Features
+
+- Live execution engine for Bybit linear perpetuals (BTC, ETH), with IOC marketable orders, exchange-hosted stop-loss and take-profit, and trailing stops.
+- Centralized, fail-closed risk manager: daily and weekly breakers, per-strategy risk dials, notional caps, and portfolio heat limits.
+- Position reconciliation against the trade journal, and a funding-history sync.
+- Replay and walk-forward harness that reproduces live execution bar by bar on local candle data.
+- Preregistered eligibility rules (E1 to E7) and a go-live gate with explicit thresholds.
+- SQLite trade journal in WAL mode, with daily verified backups and a git hash and config hash recorded on every signal.
+- Single-instance lock, health HTTP endpoint, API circuit breaker, and startup reconciliation.
+- Alerting through ntfy, Discord, and email, plus a scheduler for pre-session, intraday, post-session, and weekly jobs.
+- Streamlit dashboard that reads the journal.
+- pytest suite, GitHub Actions CI with secret scanning and dependency auditing.
 
 ---
 
@@ -27,214 +69,351 @@ connect to mainnet.
 
 ```mermaid
 flowchart TD
-    subgraph Venue["Bybit (demo/sandbox by default)"]
-      PX[Public REST / WebSocket]
-      EX[Private API (demo)]
+    subgraph CFG["Configuration"]
+        YAML["config.yaml + SECTION__KEY env overrides"]
+        PHASE["trading_phase.py: phase constants and per-phase journal"]
     end
 
-    subgraph Engine["Live engine (execution/)"]
-      SCAN[Entry scan · scan_entries]
-      RISK[Risk manager · risk/risk_manager.py]
-      ORD[Order manager · execution/order_manager.py]
-      JOURNAL[Trade journal · SQLite agent_trades.db]
+    subgraph VENUE["Bybit (demo/sandbox by default)"]
+        PUB["Public REST: candles, tickers, order books, funding"]
+        PRIV["Private API (demo): orders, positions"]
     end
 
-    subgraph Replay["Replay / walk-forward harness (research/)"]
-      REPLAY_EX[ReplayExchange — same semantics as live]
-      REPLAY_BR[ReplayBroker — R1–R11 rules, SEMANTICS.md]
+    subgraph ENGINE["Live engine (execution/)"]
+        ENG["engine.py: orchestrator and health endpoint"]
+        MKT["market_data.py: tickers, books, correlation"]
+        SCAN["entry_scanner.py: entry scan and gates"]
+        ORD["order_manager.py: IOC orders, SL/TP, flatten"]
+        MGMT["position_manager.py, s7_manager.py: trailing stops, daily flips"]
+        SYNC["position_sync.py, funding_sync.py: reconciliation and funding"]
     end
 
-    subgraph Alerting["Alerting (claude/)"]
-      NTFY[ntfy push]
-      DISCORD[Discord webhook]
-      SMTP[Email]
+    STRAT["strategies/: signal generators (S2, S7 active)"]
+    RISK["risk/risk_manager.py: breakers, sizing, heat, caps"]
+    JRN[("SQLite journal (WAL mode)")]
+
+    subgraph OPS["Ops"]
+        ALERT["Alerting: ntfy, Discord, email"]
+        SCHED["Scheduler: pre-session, intraday, post-session, weekly"]
+        DASH["Streamlit dashboard"]
     end
 
-    PX --> SCAN
-    EX --> ORD
+    subgraph RESEARCH["Research harness (research/)"]
+        LOAD["data_loader.py: local CSV candles"]
+        REX["ReplayExchange: pin-able clock, no lookahead"]
+        RBR["ReplayBroker: live semantics, trade ledger"]
+        WF["walkforward.py: OOS windows and PREREG checks"]
+    end
+
+    YAML --> ENG
+    PHASE --> ENG
+    PUB --> MKT
+    MKT --> SCAN
+    STRAT --> SCAN
     SCAN --> RISK
     RISK --> ORD
-    ORD --> JOURNAL
-    REPLAY_EX -. shared execution semantics .- SCAN
-    REPLAY_BR -. same risk rules .- RISK
-    JOURNAL -. KPIs / alerts .- NTFY
-    JOURNAL -. KPIs / alerts .- DISCORD
-    JOURNAL -. KPIs / alerts .- SMTP
+    ORD --> PRIV
+    ENG --> MGMT
+    ENG --> SYNC
+    SYNC --> PRIV
+    ORD --> JRN
+    SYNC --> JRN
+    JRN --> DASH
+    JRN --> ALERT
+    SCHED --> ALERT
+
+    LOAD --> REX --> RBR --> WF
+    STRAT -. same signal functions .-> RBR
+    RISK -. same risk rules .-> RBR
+    RBR -. semantics in SEMANTICS.md .- ENG
 ```
 
-The live path and the replay harness share execution semantics: order of
-operations per bar (funding → exchange SL/TP → management → signal-reversal →
-entry), IOC taker fills, one-owner-per-symbol, trailing stops, and the risk
-breakers are all traced in `research/SEMANTICS.md`. The replay harness
-(`research/`) reproduces them on local candle data so a walk-forward result is
-directly comparable to live behaviour.
+**Reading the diagram:** data flows from the venue into the scanner, signals from strategies are gated by the risk manager, and only then does the order manager talk to the exchange. Everything the engine does is written to the journal. The research harness reuses the same strategy functions and the same risk manager against local candles.
 
-- `research/SEMANTICS.md` — production semantics trace (R1–R11), sourced from
-  the live code, with the deliberate harness deviations (§8).
-- `research/PREREG.md` — preregistered go-live eligibility rules E1–E7 (net
-  expectancy ≥ +0.15 R, net profit factor ≥ 1.30, max drawdown ≤ 15%, etc.)
-  that must pass on out-of-sample walk-forward data *before* any strategy is
-  considered for live capital.
+### Module connections
+
+| Layer | Modules | Role |
+|---|---|---|
+| Configuration | `config.yaml`, `utils/config_loader.py`, `trading_phase.py` | YAML plus environment overrides (`SECTION__KEY`), phase constants, per-phase journal file |
+| Engine | `execution/engine.py` | Orchestrates each cycle, runs the health endpoint, holds the single-instance lock via `live/agent_runner.py` |
+| Entry path | `entry_scanner.py`, `market_data.py`, `utils/gate.py`, `utils/correlation.py` | Scans strategies, applies liquidity gate and portfolio heat, builds the correlation matrix |
+| Orders | `order_manager.py` | IOC marketable and limit orders, SL/TP placement, flatten, pending-order reconciliation |
+| Positions | `position_manager.py`, `s7_manager.py`, `position_sync.py`, `funding_sync.py` | Trailing stops, daily momentum flips, reconciliation against the journal, funding sync |
+| Risk | `risk/risk_manager.py` | The single gate for new entries; sizing, breakers, heat, notional caps |
+| Strategies | `strategies/` | Signal generators that return a signal dict or none |
+| Research | `research/` | Replay exchange and broker, walk-forward runner, preregistered rules |
+| Ops | `claude/`, `dashboard.py`, `deploy/`, `scripts/` | Notifications, scheduled jobs, dashboard, deployment examples, operational scripts |
 
 ---
 
-## Risk-manager summary (`risk/risk_manager.py`)
+## How one bar is processed
 
-The risk manager is the single gate that decides whether any new entry may be
-placed. It is fail-closed: it blocks trading until equity is established.
+The engine evaluates once per new closed 5-minute bar. The order of operations is deliberate and is the same in the replay harness.
+
+```mermaid
+flowchart LR
+    A["1. Funding settlement"] --> B["2. Exchange SL/TP check"]
+    B --> C["3. Position management"]
+    C --> D["4. Signal-reversal exit"]
+    D --> E["5. Entry scan"]
+```
+
+1. **Funding** (at 00:00, 08:00, 16:00 UTC): apply Bybit funding to open positions and record it.
+2. **Exchange-hosted SL/TP:** intrabar check against the bar's OHLC. A gap at the open is evaluated first, and the stop is assumed to fill before the target when both are inside the range.
+3. **Management:** daily risk lock, weekly kill switch, trailing stops, daily momentum flips, and a maximum position age.
+4. **Signal-reversal exit:** rerun the strategy for each open position and close if its side now opposes the position.
+5. **Entry scan:** strategies are scanned in registry order, with a per-strategy daily entry cap, one owner per symbol, a liquidity gate, and a portfolio heat gate. Entries are IOC limit orders priced slightly across the book.
+
+### Entry sizing chain
+
+```mermaid
+flowchart LR
+    S["Risk dial for the strategy"] --> D["Drawdown taper near the daily lock"]
+    D --> R["Regime multiplier (high ADX reduces size)"]
+    R --> C["Correlation multiplier"]
+    C --> M["Minimum exchange lot check (skip if stop risk too high)"]
+    M --> H["Portfolio heat check on actual stop risk"]
+    H --> O["Order placement"]
+```
+
+---
+
+## Live engine and replay harness: one set of semantics
+
+`research/SEMANTICS.md` traces the production behaviour (rules R1 to R11) back to the live code, including the deliberate deviations the harness makes (section 8). The harness provides:
+
+- **`ReplayExchange`:** serves candles from the local dataset as of a simulated "now". It rebuilds forming bars from completed 5-minute candles so there is no lookahead, and it reproduces the exchange API's candle semantics.
+- **`ReplayBroker`:** reproduces live execution bar by bar (funding, intrabar SL/TP with gap-open and stop-first rules, trailing stops, locks, flips, age limits) and emits a trade ledger with P&L, fees, slippage, funding, and R-multiples.
+- **`patched_now()`:** pins the wall clock inside strategy modules during replay.
+
+```mermaid
+flowchart LR
+    subgraph LIVE["Live"]
+        L1["Bybit demo API"] --> L2["Live engine"] --> L3["SQLite journal"]
+    end
+    subgraph REPLAY["Replay"]
+        R1["Local candle CSVs"] --> R2["ReplayExchange"] --> R3["ReplayBroker"] --> R4["Trade ledger"] --> R5["Walk-forward report"]
+    end
+    SEM["SEMANTICS.md: shared execution rules R1 to R11"]
+    SEM -.-> L2
+    SEM -.-> R3
+```
+
+The replay is an approximation of live execution, not a guarantee. Its deliberate conventions are documented in `research/SEMANTICS.md`.
+
+---
+
+## Risk manager
+
+`risk/risk_manager.py` is the single gate for new entries. It is fail-closed: it blocks trading until equity is established.
 
 **Breakers**
-- Daily loss lock: session P&L ≤ −2 % blocks new entries for the rest of the
-  UTC day; ≤ −4 % flattens all positions.
-- Daily profit target: hitting +2 % blocks new entries (a lock, not a quota to
-  chase).
-- Weekly kill switch: 7 % rolling drawdown halts entries.
-- Max position age: 7 days forces a close.
+
+| Breaker | Behaviour |
+|---|---|
+| Daily loss lock | Session P&L at or below -2% blocks new entries for the rest of the UTC day |
+| Daily flatten | Session P&L at or below -4% closes all positions |
+| Daily profit target | Reaching +2% blocks new entries (a lock, not a quota); open positions keep running |
+| Weekly kill switch | 7% rolling drawdown from the high-water mark halts new entries until the next UTC week |
+| Maximum position age | 7 days forces a close |
 
 **Sizing**
-- Per-strategy risk dial (fraction of equity), conservative defaults: S2
-  1.5 %, S7 0.8 %.
-- Position size = equity × risk dial ÷ stop distance, capped by the exchange
-  minimum-lot stop-risk check (a min lot whose stop risk exceeds 2 % of equity
-  is skipped entirely).
-- Regime and correlation size multipliers scale size down, never up beyond the
-  dial.
 
-**Heat / notional caps**
-- Portfolio heat: actual stop risk of the candidate plus stored planned risk of
-  open positions must stay under 6 % of equity.
-- Per-strategy notional caps: S2 25 %, S7 12 %, default 10 %.
+- Position size is equity times the strategy's risk dial, divided by the stop distance.
+- Conservative default dials: S2 1.5%, S7 0.8%. A hard per-trade risk ceiling applies.
+- A minimum lot whose stop risk would exceed 2% of equity is skipped entirely.
+- Regime and correlation multipliers only scale size down.
 
-**Go-live gate** (`utils/stats.py`) — net-of-cost, live-config-scoped demo
-metrics must pass profit factor > 1.3, Sharpe > 1.0, max drawdown < 15 %, and
-≥ 60 trades before go-live is considered.
+**Heat and caps**
+
+- Portfolio heat: the candidate's actual stop risk plus the stored planned risk of open positions must stay under 6% of equity. Correlated risk is capped separately.
+- Per-strategy notional caps: S2 25%, S7 12%, default 10%.
+
+**Go-live gate** (`utils/stats.py`): net-of-cost demo metrics must pass profit factor above 1.3, Sharpe above 1.0, max drawdown below 15%, and at least 60 trades before live trading is even considered.
+
+Configuration precedence (lowest to highest): `config.yaml` sections, phase constants in `trading_phase.py`, then `SECTION__KEY` environment overrides.
 
 ---
 
-## Quick start — Bybit demo only
+## Strategies
 
-The engine connects to **Bybit demo/sandbox** by default and refuses mainnet
-unless you explicitly set both `ALLOW_MAINNET=true` and
-`I_UNDERSTAND_THE_RISK=yes`. New orders are **disabled** unless
-`ENABLE_TRADING=true` is set.
+| Strategy | Markets | Logic (summary) | Status |
+|---|---|---|---|
+| S2 Breakout Retest | BTC, 5m | Opening-range breakout with volume confirmation, retest within a band, EMA ribbon trend filter | Active |
+| S7 Daily Momentum | BTC, ETH | Prior UTC day's return direction; hold until the next daily flip; stops are catastrophic guards plus a soft-loss cap | Active |
+| S1, S3, S4, S5 | | RSI reversion, VWAP bands, RSI/MACD, MA crossover | Disabled after walk-forward (see Research honesty) |
+
+All active strategies use IOC limit orders, so both entry and exit are taker fills, and fees and slippage are modelled that way.
+
+Strategy modules export a signal function that returns a signal dictionary (symbol, side, price, stop loss, take profit, label, order type, time) or nothing.
+
+---
+
+## Research and walk-forward evaluation
+
+`research/walkforward.py` runs the replay across the dataset and reports metrics per out-of-sample window and overall.
+
+**Preregistered eligibility rules (`research/PREREG.md`)**
+
+| Rule | Threshold |
+|---|---|
+| E1 | Net expectancy at least +0.15 R |
+| E2 | Bootstrap 90% lower bound above 0 |
+| E3 | Net profit factor at least 1.30 |
+| E4 | Random-entry p-value below 0.05 |
+| E5 | Positive in at least 3 of 4 out-of-sample windows |
+| E6 | Max drawdown at most 15% |
+| E7 | Still positive with fees times 1.5 and slippage times 2 |
+
+The rules were written before the runs, so a strategy cannot be tuned until it passes.
+
+Run the replay harness (after downloading data):
 
 ```bash
-# 1. Clone
-git clone <your-repo-url> trading-engine
-cd trading-engine
-
-# 2. Create environment from the template (never commit .env)
-cp .env.example .env
-# Edit .env: fill BYBIT_API_KEY / BYBIT_API_SECRET for your Bybit DEMO subaccount.
-# Leave them blank to run without any venue connection.
-
-# 3. Install dependencies
-python -m pip install -r requirements.txt
-python -m pip install pytest ruff
-
-# 4. Run the engine on demo (trading disabled by default — no orders placed)
-python3 live/agent_runner.py
-
-# To allow new orders on demo:
-#   ENABLE_TRADING=true python3 live/agent_runner.py
+python -m research.walkforward
 ```
-
-`.env.example` documents every variable: venue (`BYBIT_DEMO=true`), the
-mainnet interlock (`ALLOW_MAINNET`, `I_UNDERSTAND_THE_RISK`), the trading opt-in
-(`ENABLE_TRADING`), risk dials, and optional alerts (ntfy, Discord, SMTP) — all
-read from env, none hardcoded.
 
 ---
 
-## Data download (`scripts/download_data.py`)
+## Data
 
-`data/download_data.py` pulls 3+ years of public mainnet candles + funding from
-**Bybit public REST v5 (no API key)**:
+Market data comes from the **Bybit public REST v5 API** (no API key needed). BTC and ETH perpetuals at 5m, 15m, and 1d (1h and 1d are also resampled from 5m), plus 8-hourly funding history.
 
-```
+```bash
 python data/download_data.py
 ```
 
-- Deterministic daily chunks, resumable (existing chunks skipped), retry with
-  backoff on Bybit rate limits.
-- Writes per-chunk CSVs, a SHA-256 manifest (`data/checksums.sha256`), a cutoff
-  record (`data/cutoff.txt`), and a gap report (`data/gap_report.txt`).
-- Symbols/timeframes: BTC/USDT, ETH/USDT at 5m, 15m, 1d (see `research/PREREG.md`
-  §Data). The CSV files themselves are large and are **not** part of the
-  repository (`data/*.csv` is gitignored); `data/checksums.sha256`,
-  `data/cutoff.txt` and `data/gap_report.txt` are kept.
+- Deterministic daily chunks; resumable (existing chunks are skipped); retries with backoff on rate limits.
+- Writes per-chunk CSVs, a SHA-256 manifest (`data/checksums.sha256`), a cutoff record (`data/cutoff.txt`), and a gap report (`data/gap_report.txt`).
+- The raw CSVs are large and are **not** committed (`data/*.csv` is gitignored). Only the manifest, cutoff, gap report, and the downloader are in the repository.
 
-The checkout ships with `data/checksums.sha256`, `data/cutoff.txt`,
-`data/gap_report.txt`, and `data/download_data.py` only — no raw candles.
+---
+
+## Persistence and observability
+
+- **Journal:** SQLite in WAL mode (so the dashboard can read while the engine writes), a busy timeout, one database per phase, daily backups with verification. Tables include signals, orders, equity snapshots, funding payments, and key-value state.
+- **Auditability:** every signal records the git hash and a config hash.
+- **Health:** the engine exposes an HTTP health endpoint with status, equity, and daily P&L. A single-instance lock prevents two engines from trading one account.
+- **Reliability:** an API-health circuit breaker, startup reconciliation, and position sync with one owner per contract.
+- **Alerts:** ntfy push, Discord webhook, and email for entries, exits, kill switches, circuit-breaker events, and sync errors. See `ALERTS.md`.
+- **Dashboard:** `streamlit run dashboard.py` shows live metrics from the journal.
+
+---
+
+## Safe by default
+
+| Safeguard | Behaviour |
+|---|---|
+| Demo venue | `BYBIT_DEMO=true` by default; examples point to the sandbox only |
+| Mainnet interlock | Refuses to start on mainnet unless **both** `ALLOW_MAINNET=true` and `I_UNDERSTAND_THE_RISK=yes` are set |
+| Trading opt-in | No new orders unless `ENABLE_TRADING=true` |
+| Startup banner | A clear demo/paper banner at startup |
+| No secrets in the repo | Keys, webhooks, and passwords come from environment variables; `.env` is gitignored |
+| Secret scanning | gitleaks runs in pre-commit and in CI |
+
+---
+
+## Quick start (Bybit demo only)
+
+```bash
+# 1. Clone
+git clone https://github.com/Hassnain2003/trading-engine.git
+cd trading-engine
+
+# 2. Create your environment file (never commit .env)
+cp .env.example .env
+# Fill BYBIT_API_KEY and BYBIT_API_SECRET for a Bybit DEMO account only.
+# Leave them blank to run without any venue connection.
+
+# 3. Install dependencies (Python 3.12)
+python -m pip install -r requirements.txt
+python -m pip install pytest ruff
+
+# 4. Run the engine on demo. Trading is disabled by default, so no orders are placed.
+python3 live/agent_runner.py
+
+# To allow new orders on the demo account:
+ENABLE_TRADING=true python3 live/agent_runner.py
+```
+
+Optional: download data with `python data/download_data.py` and run the dashboard with `streamlit run dashboard.py`.
+
+---
+
+## Configuration
+
+Settings live in `config.yaml` and can be overridden with environment variables using the `SECTION__KEY` convention, for example `RISK__DAILY_LOSS_LOCK_PCT=0.03`. Secrets and consent flags are environment-only. See `.env.example` for every variable: venue and keys, `ALLOW_MAINNET`, `I_UNDERSTAND_THE_RISK`, `ENABLE_TRADING`, risk dials, and alert destinations.
 
 ---
 
 ## Tests and CI
 
 ```bash
-# Full suite
 python -m pytest tests/ -v
-
-# Lint (CI-enforced rules: syntax / undefined names / unused imports)
 ruff check --select=E9,F63,F7,F82 .
-
-# Secret scan (pre-commit runs this on every commit)
 gitleaks detect --source . --no-git --verbose
 ```
 
-CI (`.github/workflows/ci.yml`) runs on every push/PR:
-1. `gitleaks` secret scan on the tree.
-2. `pytest tests/` test suite.
-3. `pip-audit` against pinned `requirements.txt` (findings are reported, not
-   hidden).
-4. `ruff` lint.
-5. Module-import verification.
+The test suite covers the risk manager (sizing, caps, breakers, the weekly kill switch), the entry scanner, order management, position sync, statistics and the go-live gate, configuration loading, correlation and portfolio-heat caps, minimum-lot handling, the circuit breaker, WAL and backup behaviour, and market data collection.
+
+GitHub Actions (`.github/workflows/ci.yml`) runs on every push and pull request: a gitleaks secret scan, pytest, pip-audit on the pinned requirements (findings are reported, not hidden), ruff, and a module-import check.
+
+---
+
+## Repository layout
+
+```text
+trading-engine/
+├── execution/        Live engine: orchestrator, orders, positions, funding, market data
+├── risk/             Central risk manager
+├── strategies/       Signal generators (S2 and S7 active; others disabled)
+├── research/         Replay exchange and broker, walk-forward, SEMANTICS.md, PREREG.md
+├── utils/            Config loader, liquidity gate, correlation, statistics
+├── live/             Runner with single-instance lock
+├── backtest/         Historical strategy studies
+├── data/             Downloader, checksums, cutoff, gap report (no raw CSVs)
+├── deploy/           Deployment examples (systemd unit, install scripts)
+├── scripts/          Operational scripts
+├── tests/            pytest suite
+├── docs/             Architecture notes and demo placeholders
+├── claude/           Alerting, scheduling, and LLM clients
+├── dashboard.py      Streamlit dashboard
+├── config.yaml       Configuration
+├── trading_phase.py  Phase constants
+└── ALERTS.md, SECURITY.md, CONTRIBUTING, LICENSE
+```
 
 ---
 
 ## Limitations
 
-- Defaults to Bybit demo/sandbox; mainnet is refused unless both consent flags
-  are set, and even then you trade real money at your own risk.
-- Pandas-ta / numba-based indicators require Python < 3.14 (CI uses 3.12); on
-  Python 3.14 the modules still import but trailing-stop math needs pandas_ta.
-- The replay harness makes deterministic conventions (intrabar fills, mark
-  vs last price) documented as deliberate deviations in `research/SEMANTICS.md`
-  §8; it is an approximation of live execution, not a guarantee.
-- No strategy is guaranteed to be profitable; several were removed after
-  walk-forward showed no edge (see Research honesty below).
+- Defaults to Bybit demo; even with both consent flags, mainnet means real money at your own risk.
+- Indicator libraries (pandas-ta, numba) need Python below 3.14; CI uses 3.12.
+- The replay harness uses deliberate conventions (intrabar fills, mark versus last price), documented in `research/SEMANTICS.md` section 8. It approximates live execution and does not guarantee it.
+- Demo order books can differ from mainnet; some thin symbols were excluded for that reason.
+- No strategy is guaranteed to be profitable.
+- Single-venue, single-account design.
 
 ---
 
 ## Research honesty
 
-Strategies **S1, S3, S4, and S5** were disabled after walk-forward showed no
-edge against the preregistered eligibility rules in `research/PREREG.md`
-(E1–E7: net expectancy ≥ +0.15 R, bootstrap lower bound > 0, net profit factor
-≥ 1.30, random-entry p < 0.05, positive in ≥ 3 of 4 rolling OOS windows, max
-drawdown ≤ 15 %, robust to cost stress). None cleared the gate, so they are
-registered in `STRATEGY_CONFIG` but excluded from `ACTIVE_STRATEGIES`.
+Strategies **S1, S3, S4, and S5** were disabled after walk-forward evaluation showed no edge against the preregistered rules in `research/PREREG.md`. None passed the gate, so they are registered in the strategy configuration but excluded from the active list.
 
-Strategy **S9 ("sacred harmonic")** — a numerology-based scored strategy — has
-been removed entirely from this public copy (code, config, registry, tests, and
-docs). If you need it restored, ask the maintainer; it is not part of the
-public engine.
+Strategy **S9** was removed entirely from this public copy.
 
 No profit, return, or win-rate claims are made anywhere in this repository.
 
 ---
 
-## Demo assets (placeholders)
+## Roadmap
 
-A short demo GIF and walkthrough video will be recorded and placed here:
-
-- `docs/demo/demo.gif` — placeholder (to be recorded)
-- `docs/demo/demo.mp4` — placeholder (to be recorded)
-
-These do not exist yet; the links are reserved.
+- Record a demo GIF and walkthrough video (`docs/demo/`).
+- Add integration tests against a mocked exchange for the full order lifecycle.
+- Publish a sample walk-forward report from the small downloadable dataset.
 
 ---
 
 ## License
 
-[MIT](LICENSE) — Copyright (c) 2026 Hassnain Abbas.
+[MIT](LICENSE). Copyright (c) 2026 Hassnain Abbas.
