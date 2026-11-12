@@ -7,5 +7,5 @@ pyyaml==6.0.3
 pytest==9.2.0
 streamlit==1.67.0
 plotly==7.1.0
-vectorbt==0.28.5
+vectorbt==1.0.0
 pandas-ta==0.4.71b0
