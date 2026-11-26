@@ -1,4 +1,4 @@
-ccxt==4.5.92
+ccxt==4.5.93
 pandas==2.3.2
 python-dotenv==1.2.4
 requests==2.34.2
